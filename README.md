@@ -8,11 +8,11 @@ An example implementation of [Uber's Generative Teaching Network (GTN)](https://
 
 * GPU:
 
-`docker build -f gpuDockerfile -t kerasgtn`
+`docker build -f gpuDockerfile -t kerasgtn .`
 
 * CPU:
 
-`docker build -f cpuDockerfile -t kerasgtn`
+`docker build -f cpuDockerfile -t kerasgtn .`
 
 ### Run (bash)
 
