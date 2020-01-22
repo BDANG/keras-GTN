@@ -1,2 +1,4 @@
 # keras-GTN
-An example implementation of Uber's Generative Teaching Network (GTN) with Keras
+An example implementation of [Uber's Generative Teaching Network (GTN)](https://eng.uber.com/generative-teaching-networks/) with [Keras](keras.io)
+
+**Currently have not tried exact reproduction**
