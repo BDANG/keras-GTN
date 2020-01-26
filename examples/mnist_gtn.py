@@ -51,7 +51,7 @@ class MNIST_GTN(GTN):
         if self.learner is not None:
             return self.learner
         # TODO: verify concatenate axis
-        x = ConcatLayer([real_input, teacher], axis=0)
+        x = ConcatLayer([real_input, teacher], axis=-1)
         
         x = Conv2D(64, (3, 3), padding='same')(x)
         x = LeakyReLU()(x)
@@ -77,4 +77,5 @@ if __name__ == "__main__":
     gtn = MNIST_GTN(real_input_shape=(28, 28, 1), n_classes=10)
     model = gtn.get_model()
     model.summary()
+    gtn.train(0, 0)
     
