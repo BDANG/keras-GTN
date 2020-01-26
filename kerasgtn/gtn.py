@@ -7,6 +7,7 @@ from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Reshape
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, UpSampling2D
 from tensorflow.keras.layers import LeakyReLU, Dropout
 from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import concatenate as ConcatLayer
 from tensorflow.keras.optimizers import Adadelta, Adam, RMSprop
 
 
@@ -30,7 +31,7 @@ class GTN(object):
         self.generator = None
         self.model = None
 
-    def get_learner(self, input_layer):
+    def get_learner(self, teacher, real_input):
         """
         :return: an uncompiled keras.models.Model that represents a learner
         """
@@ -54,18 +55,19 @@ class GTN(object):
         if self.model:
             return self.model
         
-        # ('outer loop' from the GTN paper)
-        # real training data
-        real_input = Input(shape=self.real_input_shape, name='real_input')
-        real_learner = self.get_learner(real_input)
-        real_output = Dense(self.n_classes, activation='sigmoid', name='real_output')(real_learner)
-
         # ('inner loop' from the GTN paper)
         # noise input
         fake_input = Input(shape=self.noise_shape, name='fake_input')
+        
+        # ('outer loop' from the GTN paper)
+        # real training data
+        real_input = Input(shape=self.real_input_shape, name='real_input')        
+        
         teacher = self.get_generator(fake_input)
-        fake_learner = self.get_learner(teacher)(teacher)
-        fake_output = Dense(self.n_classes, activation='sigmoid', name='fake_output')(fake_learner)
+        learner = self.get_learner(teacher, real_input)
+        
+        fake_output = Dense(self.n_classes, activation='sigmoid', name='fake_output')(learner)
+        real_output = Dense(self.n_classes, activation='sigmoid', name='real_output')(learner)
 
         self.model = Model(
             inputs=[real_input, fake_input],

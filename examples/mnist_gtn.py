@@ -4,6 +4,7 @@ from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Reshape
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, UpSampling2D
 from tensorflow.keras.layers import LeakyReLU, Dropout
 from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import concatenate as ConcatLayer
 from tensorflow.keras.optimizers import Adadelta, Adam, RMSprop
 
 class MNIST_GTN(GTN):
@@ -46,12 +47,13 @@ class MNIST_GTN(GTN):
         self.generator = x
         return self.generator
 
-    def get_learner(self, input_layer):
+    def get_learner(self, real_input, teacher):
         if self.learner is not None:
-            print(input_layer)
             return self.learner
+        # TODO: verify concatenate axis
+        x = ConcatLayer([real_input, teacher], axis=0)
         
-        x = Conv2D(64, (3, 3), padding='same')(input_layer)
+        x = Conv2D(64, (3, 3), padding='same')(x)
         x = LeakyReLU()(x)
         x = Dropout(0.2)(x)
         
@@ -74,4 +76,5 @@ class MNIST_GTN(GTN):
 if __name__ == "__main__":
     gtn = MNIST_GTN(real_input_shape=(28, 28, 1), n_classes=10)
     model = gtn.get_model()
+    model.summary()
     
