@@ -13,13 +13,13 @@ An example implementation of [Uber's Generative Teaching Network (GTN)](https://
 
 `docker run --gpus all -u $(id -u):$(id -g) -it --rm -v $PWD:/tf kerasgtn:latest bash`
 
-Remove `--gpus all` if using GPU Dockerfile
+Remove `--gpus all` if using CPU Dockerfile
 
 ### Run Docker (jupyter notebook)
 
 `docker run --gpus all -u $(id -u):$(id -g) -it --rm -v -p 8888:8888 $PWD:/tf kerasgtn:latest`
 
-Remove `--gpus all` if using GPU Dockerfile
+Remove `--gpus all` if using CPU Dockerfile
 
 ---
 
