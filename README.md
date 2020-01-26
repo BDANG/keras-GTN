@@ -1,27 +1,45 @@
-# (VERY WIP) keras-GTN
+# `VERY WIP` Currently have not tried exact reproduction
+
+# keras-GTN
 An example implementation of [Uber's Generative Teaching Network (GTN)](https://eng.uber.com/generative-teaching-networks/) with [Keras (tensorflow)](https://keras.io)
-
-**Currently have not tried exact reproduction**
-
 
 ### Setup (currently tested on Ubuntu w/ Tensorflow Docker)
 
-* GPU:
+* GPU: `docker build -f gpuDockerfile -t kerasgtn .`
 
-`docker build -f gpuDockerfile -t kerasgtn .`
+* CPU: `docker build -f cpuDockerfile -t kerasgtn .`
 
-* CPU:
+### Run Docker (bash)
 
-`docker build -f cpuDockerfile -t kerasgtn .`
+`docker run --gpus all -u $(id -u):$(id -g) -it --rm -v $PWD:/tf kerasgtn:latest bash`
 
-### Run (bash)
+Remove `--gpus all` if using GPU Dockerfile
 
-`docker run -u $(id -u):$(id -g) -it --rm -v $PWD:/tf kerasgtn:latest bash`
+### Run Docker (jupyter notebook)
 
-Include `--gpus all` if using GPU Dockerfile
+`docker run --gpus all -u $(id -u):$(id -g) -it --rm -v -p 8888:8888 $PWD:/tf kerasgtn:latest`
 
-### Run (jupyter notebook)
+Remove `--gpus all` if using GPU Dockerfile
 
-`docker run -p 8888:8888 -u $(id -u):$(id -g) -it --rm -v $PWD:/tf kerasgtn:latest`
+---
 
-Include `--gpus all` if using GPU Dockerfile
+## *EXPECTED* Usage
+
+```
+from kerasgtn.gtn import GTN
+
+
+class MyGTN(GTN):
+    def __init__(self, **kwargs):
+        super(MyGTN, self).__init__(**kwargs)
+    
+    def get_generator(self, input_layer):
+        <implement>
+    
+    def get_learner(self, real_input, teacher):
+        <implement>
+
+
+gtn = MyGTN(input_shape=input_shape, n_classes=n_classes)
+gtn.train(...)
+```
