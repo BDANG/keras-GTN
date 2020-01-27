@@ -12,13 +12,17 @@ from tensorflow.keras.optimizers import Adadelta, Adam, RMSprop
 from tensorflow.keras.utils import to_categorical
 
 class GTN(object):
-    def __init__(self, real_input_shape, n_classes, noise_shape=None, optimizer=None):
+    def __init__(self, datagen=None, real_input_shape=None, n_classes=None, noise_shape=None, optimizer=None):
+        if datagen is None and real_input_shape is None and n_classes is None:
+            raise ValueError("GTN requires Keras data generator (or keras.utils.Sequence) OR real_input_shape and n_classes")
+
+        self.datagen = datagen
 
         # shape of the real data without batch size
         self.real_input_shape = real_input_shape
 
         # number of classes
-        self.n_classes = n_classes
+        self.n_classes = datagen.n_classes if datagen else n_classes
 
         # shape of the noise vector for the generator
         self.noise_shape = noise_shape if noise_shape else (100,)
@@ -102,17 +106,30 @@ class GTN(object):
             n = n * dimension
         return np.random.uniform(-1.0, 1.0, size=(batch_size,)+self.noise_shape)
 
-    def train(self, fake_epochs, real_epochs, generator_batch_size=32):
+    def train(self, inner_loops, outer_loops):
+        model = self.get_model()
+
+        self.datagen.noise_only = True
+        for _ in range(inner_loops):
+            model.fit(
+                self.datagen,
+                epochs=2
+            )        
+
+    # TODO: support manually training
+    def manual_train(self, fake_epochs, real_epochs, generator_batch_size=32):
         
         model = self.get_model()
 
         inner_loops = 8
         # inner loop (fake data)
         for _ in range(inner_loops):
+            # teacher data
             noise = self.get_noise_array(generator_batch_size)
             fake_classes = np.random.randint(self.n_classes, size=generator_batch_size)
             fake_classes = to_categorical(fake_classes)
 
+            # blank data for the real input
             blank_input = np.zeros((generator_batch_size,)+self.real_input_shape)
             blank_output = np.zeros(generator_batch_size)
             blank_output = to_categorical(blank_output, num_classes=self.n_classes)

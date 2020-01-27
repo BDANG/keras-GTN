@@ -6,6 +6,63 @@ from tensorflow.keras.layers import LeakyReLU, Dropout
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import concatenate as ConcatLayer
 from tensorflow.keras.optimizers import Adadelta, Adam, RMSprop
+from tensorflow.keras.utils import Sequence
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.datasets import mnist
+import numpy as np
+import random
+
+
+class MNISTDataGenerator(Sequence):
+    def __init__(self, batch_size=16, n_classes=10, noise_shape=(100,), shuffle=False):
+        self.batch_size = batch_size
+        self.n_classes = n_classes
+        self.noise_shape = noise_shape
+        self.shuffle = shuffle
+        
+        (x_train, y_train), (x_test, y_test) = mnist.load_data()
+        
+        # use small datset for the sake of development
+        x_train = x_train[:1000, :, :]
+        x_train = x_train.reshape((1000, 28, 28, 1))
+        y_train = y_train[:1000]
+
+        self.x_train = x_train
+        self.y_train = to_categorical(y_train, num_classes=self.n_classes)
+        
+        # toggle whether datagenerator should return noise only
+        self.noise_only = True
+        
+        self.on_epoch_end()
+    
+    def __len__(self):
+        'Denotes the number of batches per epoch'
+        return int(self.x_train.shape[0] // self.batch_size)
+
+    def __getitem__(self, index):
+        """
+        Generate one batch of data
+        :return: {'real_input': real_data, 'noise_input': noise},
+                 {'real_output': real_output, 'fake_output': fake_output}
+        """
+        if self.noise_only:
+            # blank data
+            real_data = np.zeros((self.batch_size,)+self.x_train.shape[1:])
+            real_output = np.zeros(self.batch_size)
+            real_output = to_categorical(real_output, num_classes=self.n_classes)
+        else:
+            real_data = self.x_train[index:(index+self.batch_size), :, :]
+            real_output = self.y_train[index:(index+self.batch_size), :]
+        
+        noise = np.random.uniform(-1.0, 1.0, size=(self.batch_size, 100))
+        fake_output = np.random.randint(self.n_classes, size=self.batch_size)
+        fake_output = to_categorical(fake_output, num_classes=self.n_classes)
+        
+        return {'real_input': real_data, 'noise_input': noise}, {'real_output': real_output, 'fake_output': fake_output}
+    
+    def on_epoch_end(self):
+        pass
+
 
 class MNIST_GTN(GTN):
     def __init__(self, **kwargs):
@@ -74,8 +131,9 @@ class MNIST_GTN(GTN):
 
 
 if __name__ == "__main__":
-    gtn = MNIST_GTN(real_input_shape=(28, 28, 1), n_classes=10)
+    datagen = MNISTDataGenerator(n_classes=10)
+    gtn = MNIST_GTN(datagen=datagen, real_input_shape=(28, 28, 1), n_classes=10)
     model = gtn.get_model()
     model.summary()
-    gtn.train(0, 0)
+    gtn.train(inner_loops=3, outer_loops=1)
     
