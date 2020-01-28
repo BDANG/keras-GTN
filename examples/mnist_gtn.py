@@ -24,6 +24,8 @@ class MNISTDataGenerator(Sequence):
         
         # use small datset for the sake of development
         x_train = x_train[:1000, :, :]
+
+        # channel last reshape
         x_train = x_train.reshape((1000, 28, 28, 1))
         y_train = y_train[:1000]
 
@@ -107,9 +109,12 @@ class MNIST_GTN(GTN):
     def get_learner(self, real_input, teacher):
         if self.learner is not None:
             return self.learner
+
+        # learner has 2 possible inputs: real data and synthetic data (output of the generator)
         # TODO: verify concatenate axis
         x = ConcatLayer([real_input, teacher], axis=-1)
         
+        # TODO: verify that this architecture is good for MNIST
         x = Conv2D(64, (3, 3), padding='same')(x)
         x = LeakyReLU()(x)
         x = Dropout(0.2)(x)
@@ -135,5 +140,5 @@ if __name__ == "__main__":
     gtn = MNIST_GTN(datagen=datagen, real_input_shape=(28, 28, 1), n_classes=10)
     model = gtn.get_model()
     model.summary()
-    gtn.train(inner_loops=3, outer_loops=1)
+    gtn.train(inner_loops=4, outer_loops=2)
     

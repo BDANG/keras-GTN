@@ -25,7 +25,12 @@ class GTN(object):
         self.n_classes = datagen.n_classes if datagen else n_classes
 
         # shape of the noise vector for the generator
-        self.noise_shape = noise_shape if noise_shape else (100,)
+        if datagen.noise_shape:  # datagenerator noise shape has highest priority
+            self.noise_shape = datagen.noise_shape
+        elif noise_shape:  # provided noise shape is next priority
+            self.noise_shape = noise_shape
+        else:  # default
+            self.noise_shape = (100,)
         
         # optimizer for both inner and outer loops...
         self.optimizer = RMSprop() if optimizer is None else optimizer
@@ -77,6 +82,7 @@ class GTN(object):
         fake_output = Dense(self.n_classes, activation='sigmoid', name='fake_output')(learner)
         real_output = Dense(self.n_classes, activation='sigmoid', name='real_output')(learner)
 
+        # model is compiled with two inputs and two outputs
         self.model = Model(
             inputs=[real_input, noise_input],
             outputs=[real_output, fake_output]
@@ -91,13 +97,14 @@ class GTN(object):
             },
             loss_weights={
                 'real_output': 1.0,
-                'fake_output': 1.0
+                'fake_output': 0.1  # fake output should have less impact on weight updates
             }
         )
         return self.model
 
     def get_noise_array(self, batch_size):
         """
+        TODO: should be used by manual training, not yet supported
         Make noise data for the generator
         :return: an np.array of shape self.noise_shape
         """
@@ -109,15 +116,25 @@ class GTN(object):
     def train(self, inner_loops, outer_loops):
         model = self.get_model()
 
-        self.datagen.noise_only = True
-        for _ in range(inner_loops):
+        for _ in range(outer_loops):
+            self.datagen.noise_only = True
+            for _ in range(inner_loops):
+                model.fit(
+                    self.datagen,
+                    epochs=2
+                )
+            
+            # outerloop training
+            # generator weights should be updated from real-data loss
+            self.datagen.noise_only = False
             model.fit(
                 self.datagen,
                 epochs=2
-            )        
+            )
 
     # TODO: support manually training
     def manual_train(self, fake_epochs, real_epochs, generator_batch_size=32):
+        raise NotImplementedError
         
         model = self.get_model()
 
