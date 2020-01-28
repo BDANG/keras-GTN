@@ -16,18 +16,20 @@ import random
 class MNISTDataGenerator(Sequence):
     def __init__(self, batch_size=16, n_classes=10, noise_shape=(100,), shuffle=False):
         self.batch_size = batch_size
-        self.n_classes = n_classes
+        
+        # include an additional dead-class for when blank real data is given to the model
+        self.n_classes = n_classes+1
         self.noise_shape = noise_shape
         self.shuffle = shuffle
         
         (x_train, y_train), (x_test, y_test) = mnist.load_data()
         
         # use small datset for the sake of development
-        x_train = x_train[:1000, :, :]
+        x_train = x_train[:500, :, :]
 
         # channel last reshape
-        x_train = x_train.reshape((1000, 28, 28, 1))
-        y_train = y_train[:1000]
+        x_train = x_train.reshape((500, 28, 28, 1))
+        y_train = y_train[:500]
 
         self.x_train = x_train
         self.y_train = to_categorical(y_train, num_classes=self.n_classes)
@@ -50,7 +52,10 @@ class MNISTDataGenerator(Sequence):
         if self.noise_only:
             # blank data
             real_data = np.zeros((self.batch_size,)+self.x_train.shape[1:])
-            real_output = np.zeros(self.batch_size)
+            
+            # blank x data should map to y that is 'dead class'
+            # i.e. if self.n_classes=11, then the 'dead class' is 10
+            real_output = np.ones(self.batch_size)*(self.n_classes-1)
             real_output = to_categorical(real_output, num_classes=self.n_classes)
         else:
             real_data = self.x_train[index:(index+self.batch_size), :, :]
@@ -140,5 +145,5 @@ if __name__ == "__main__":
     gtn = MNIST_GTN(datagen=datagen, real_input_shape=(28, 28, 1), n_classes=10)
     model = gtn.get_model()
     model.summary()
-    gtn.train(inner_loops=4, outer_loops=2)
+    gtn.train(inner_loops=4, outer_loops=4)
     
