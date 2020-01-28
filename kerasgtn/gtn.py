@@ -117,6 +117,7 @@ class GTN(object):
         model = self.get_model()
 
         for _ in range(outer_loops):
+            print("INNER LOOP TRAIN")
             self.datagen.noise_only = True
             for _ in range(inner_loops):
                 model.fit(
@@ -124,6 +125,7 @@ class GTN(object):
                     epochs=2
                 )
             
+            print("OUTER LOOP TRAIN")
             # outerloop training
             # generator weights should be updated from real-data loss
             self.datagen.noise_only = False
