@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import time
+import matplotlib.pyplot as plt
 
 
 from tensorflow.keras.models import Sequential, Model
@@ -12,7 +14,7 @@ from tensorflow.keras.optimizers import Adadelta, Adam, RMSprop
 from tensorflow.keras.utils import to_categorical
 
 class GTN(object):
-    def __init__(self, datagen=None, real_input_shape=None, n_classes=None, noise_shape=None, optimizer=None):
+    def __init__(self, datagen=None,real_input_shape=None, n_classes=None, noise_shape=None, optimizer=None, save_synthetic=None):
         if datagen is None and real_input_shape is None and n_classes is None:
             raise ValueError("GTN requires Keras data generator (or keras.utils.Sequence) OR real_input_shape and n_classes")
 
@@ -39,6 +41,8 @@ class GTN(object):
         self.learner = None
         self.generator = None
         self.model = None
+
+        self.synthetic_dir = save_synthetic  # get_or_create_dir(sythentic_dir) if sythentic_dir is not None else None
 
     def get_learner(self, teacher, real_input):
         """
@@ -85,7 +89,7 @@ class GTN(object):
         # model is compiled with two inputs and two outputs
         self.model = Model(
             inputs=[real_input, noise_input],
-            outputs=[real_output, fake_output]
+            outputs=[real_output, fake_output, teacher]
         )
 
         # TODO: make loss/weights a class variable?
@@ -97,8 +101,9 @@ class GTN(object):
             },
             loss_weights={
                 'real_output': 1.0,
-                'fake_output': 0.1  # fake output should have less impact on weight updates
-            }
+                'fake_output': 0.5  # fake output should have less impact on weight updates
+            },
+            metrics=['categorical_accuracy']
         )
         return self.model
 
@@ -122,7 +127,8 @@ class GTN(object):
             for _ in range(inner_loops):
                 model.fit(
                     self.datagen,
-                    epochs=2
+                    epochs=2,
+                    verbose=0
                 )
             
             print("OUTER LOOP TRAIN")
@@ -133,6 +139,22 @@ class GTN(object):
                 self.datagen,
                 epochs=2
             )
+        
+        if self.synthetic_dir:
+            out = self.model.predict(self.datagen[0][0])
+            images = out[-1]
+            plt.figure(figsize=(10,10))
+            for i in range(images.shape[0]):
+                plt.subplot(4, 4, i+1)
+                image = images[i, :, :, :]
+                image = np.reshape(image, [28, 28])
+                plt.imshow(image, cmap='gray')
+                plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(os.path.join(self.synthetic_dir, "t.png"))
+            plt.close('all')
+        
+
 
     # TODO: support manually training
     def manual_train(self, fake_epochs, real_epochs, generator_batch_size=32):
