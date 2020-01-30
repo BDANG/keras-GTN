@@ -2,6 +2,7 @@ from kerasgtn.gtn import GTN
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Reshape
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, UpSampling2D
+from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.layers import LeakyReLU, Dropout
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import concatenate as ConcatLayer
@@ -65,7 +66,7 @@ class MNISTDataGenerator(Sequence):
         fake_output = np.random.randint(self.n_classes, size=self.batch_size)
         fake_output = to_categorical(fake_output, num_classes=self.n_classes)
         
-        return {'real_input': real_data, 'noise_input': noise}, {'real_output': real_output, 'fake_output': fake_output}
+        return {'real_input': real_data.astype(np.float32), 'noise_input': noise}, {'real_output': real_output, 'fake_output': fake_output}
     
     def on_epoch_end(self):
         pass
@@ -107,11 +108,11 @@ class MNIST_GTN(GTN):
 
         # Out: 28 x 28 x 1 grayscale image [0.0,1.0] per pix
         x = Conv2DTranspose(1, 5, padding='same')(x)
-        x = Activation('sigmoid')(x)
+        x = Activation('sigmoid', name="generator_output")(x)
         self.generator = x
         return self.generator
 
-    def get_learner(self, real_input, teacher):
+    def get_learner_old(self, real_input, teacher):
         if self.learner is not None:
             return self.learner
 
@@ -139,11 +140,27 @@ class MNIST_GTN(GTN):
         self.learner = x
         return self.learner
 
+    def get_learner(self, real_input, teacher):
+        if self.learner is not None:
+            return self.learner
+        
+        x = ConcatLayer([real_input, teacher], axis=1)
+
+        x = Conv2D(64, (3, 3), padding='same')(x)
+        x = LeakyReLU()(x)
+        x = MaxPooling2D(pool_size=(2,2))(x)
+        x = Flatten()(x)
+        x = Dense(128, activation='relu')(x)
+        x = Dropout(0.2)(x)
+        self.learner = x
+        return self.learner
+
 
 if __name__ == "__main__":
     datagen = MNISTDataGenerator(n_classes=10)
-    gtn = MNIST_GTN(datagen=datagen, real_input_shape=(28, 28, 1), n_classes=10)
+    optimizer = Adadelta()
+    gtn = MNIST_GTN(datagen=datagen, optimizer=optimizer, real_input_shape=(28, 28, 1), n_classes=10, save_synthetic="synthetic")
     model = gtn.get_model()
     model.summary()
-    gtn.train(inner_loops=4, outer_loops=4)
+    gtn.train(inner_loops=2, outer_loops=8)
     
