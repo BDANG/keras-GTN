@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Reshape
+from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Reshape, Lambda
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, UpSampling2D
 from tensorflow.keras.layers import LeakyReLU, Dropout
 from tensorflow.keras.layers import BatchNormalization
@@ -70,21 +70,33 @@ class GTN(object):
         
         # (for the 'inner loop' from the GTN paper)
         # noise input
-        noise_input = Input(shape=self.noise_shape, name='noise_input')
+        noise_input = Input(
+            #shape=self.noise_shape,
+            batch_shape=(16,)+self.noise_shape,
+            name='noise_input'
+        )
         
         # (for 'outer loop' from the GTN paper)
         # real training data
-        real_input = Input(shape=self.real_input_shape, name='real_input')        
-        
+        real_input = Input(
+            #shape=self.real_input_shape,
+            batch_shape=(16,)+self.real_input_shape,
+            name='real_input'
+        )
         # generate takes noise as input
         teacher = self.get_generator(noise_input)
 
         # learner gets input from synthetic data or real data
         learner = self.get_learner(teacher, real_input)
+
+        # concatenate layer in learner is concatenate [real, fake] axis =0
+        real_output = Lambda(lambda x: x[16:, :])(learner)
+        fake_output = Lambda(lambda x: x[:16, :])(learner)
+
         
         # learner should have a fake output so we can prevent fake data from updating weights
-        fake_output = Dense(self.n_classes, activation='sigmoid', name='fake_output')(learner)
-        real_output = Dense(self.n_classes, activation='sigmoid', name='real_output')(learner)
+        fake_output = Dense(self.n_classes, activation='sigmoid', name='fake_output')(fake_output)
+        real_output = Dense(self.n_classes, activation='sigmoid', name='real_output')(real_output)
 
         # model is compiled with two inputs and two outputs
         self.model = Model(
@@ -101,7 +113,7 @@ class GTN(object):
             },
             loss_weights={
                 'real_output': 1.0,
-                'fake_output': 0.5  # fake output should have less impact on weight updates
+                'fake_output': 0.001  # fake output should have less impact on weight updates
             },
             metrics=['categorical_accuracy']
         )
@@ -137,7 +149,8 @@ class GTN(object):
             self.datagen.noise_only = False
             model.fit(
                 self.datagen,
-                epochs=2
+                epochs=2,
+                verbose=1
             )
         
         if self.synthetic_dir:

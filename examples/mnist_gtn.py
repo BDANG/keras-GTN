@@ -26,11 +26,12 @@ class MNISTDataGenerator(Sequence):
         (x_train, y_train), (x_test, y_test) = mnist.load_data()
         
         # use small datset for the sake of development
-        x_train = x_train[:500, :, :]
+        sample_size = 1000
+        x_train = x_train[:sample_size, :, :]
 
         # channel last reshape
-        x_train = x_train.reshape((500, 28, 28, 1))
-        y_train = y_train[:500]
+        x_train = x_train.reshape((sample_size, 28, 28, 1))
+        y_train = y_train[:sample_size]
 
         self.x_train = x_train
         self.y_train = to_categorical(y_train, num_classes=self.n_classes)
@@ -50,6 +51,10 @@ class MNISTDataGenerator(Sequence):
         :return: {'real_input': real_data, 'noise_input': noise},
                  {'real_output': real_output, 'fake_output': fake_output}
         """
+        noise = np.random.uniform(-1.0, 1.0, size=(self.batch_size, 100))
+        fake_output = np.random.randint(self.n_classes, size=self.batch_size)
+        fake_output = to_categorical(fake_output, num_classes=self.n_classes)
+        
         if self.noise_only:
             # blank data
             real_data = np.zeros((self.batch_size,)+self.x_train.shape[1:])
@@ -61,10 +66,7 @@ class MNISTDataGenerator(Sequence):
         else:
             real_data = self.x_train[index:(index+self.batch_size), :, :]
             real_output = self.y_train[index:(index+self.batch_size), :]
-        
-        noise = np.random.uniform(-1.0, 1.0, size=(self.batch_size, 100))
-        fake_output = np.random.randint(self.n_classes, size=self.batch_size)
-        fake_output = to_categorical(fake_output, num_classes=self.n_classes)
+            #fake_output = np.copy(real_output)
         
         return {'real_input': real_data.astype(np.float32), 'noise_input': noise}, {'real_output': real_output, 'fake_output': fake_output}
     
@@ -144,7 +146,8 @@ class MNIST_GTN(GTN):
         if self.learner is not None:
             return self.learner
         
-        x = ConcatLayer([real_input, teacher], axis=1)
+        # CONCATENATE IS ALWAYS REAL INPUT FIRST
+        x = ConcatLayer([real_input, teacher], axis=0)
 
         x = Conv2D(64, (3, 3), padding='same')(x)
         x = LeakyReLU()(x)
@@ -162,5 +165,5 @@ if __name__ == "__main__":
     gtn = MNIST_GTN(datagen=datagen, optimizer=optimizer, real_input_shape=(28, 28, 1), n_classes=10, save_synthetic="synthetic")
     model = gtn.get_model()
     model.summary()
-    gtn.train(inner_loops=2, outer_loops=8)
+    gtn.train(inner_loops=2, outer_loops=6)
     
