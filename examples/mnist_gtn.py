@@ -51,7 +51,7 @@ class MNISTDataGenerator(Sequence):
         :return: {'real_input': real_data, 'noise_input': noise},
                  {'real_output': real_output, 'fake_output': fake_output}
         """
-        noise = np.random.uniform(-1.0, 1.0, size=(self.batch_size, 100))
+        noise = np.random.normal(size=(self.batch_size, 100))
         fake_output = np.random.randint(self.n_classes, size=self.batch_size)
         fake_output = to_categorical(fake_output, num_classes=self.n_classes)
         
@@ -66,7 +66,6 @@ class MNISTDataGenerator(Sequence):
         else:
             real_data = self.x_train[index:(index+self.batch_size), :, :]
             real_output = self.y_train[index:(index+self.batch_size), :]
-            #fake_output = np.copy(real_output)
         
         return {'real_input': real_data.astype(np.float32), 'noise_input': noise}, {'real_output': real_output, 'fake_output': fake_output}
     
@@ -165,5 +164,5 @@ if __name__ == "__main__":
     gtn = MNIST_GTN(datagen=datagen, optimizer=optimizer, real_input_shape=(28, 28, 1), n_classes=10, save_synthetic="synthetic")
     model = gtn.get_model()
     model.summary()
-    gtn.train(inner_loops=2, outer_loops=6)
+    gtn.train(inner_loops=2, outer_loops=2)
     

@@ -113,7 +113,7 @@ class GTN(object):
             },
             loss_weights={
                 'real_output': 1.0,
-                'fake_output': 0.001  # fake output should have less impact on weight updates
+                'fake_output': 0.01  # fake output should have less impact on weight updates
             },
             metrics=['categorical_accuracy']
         )
