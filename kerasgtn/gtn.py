@@ -10,8 +10,10 @@ from tensorflow.keras.layers import Conv2D, Conv2DTranspose, UpSampling2D
 from tensorflow.keras.layers import LeakyReLU, Dropout
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import concatenate as ConcatLayer
-from tensorflow.keras.optimizers import Adadelta, Adam, RMSprop
+from tensorflow.keras.optimizers import Adadelta, Adam, RMSprop, SGD
 from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.losses import CategoricalCrossentropy
+from tensorflow import GradientTape
 
 class GTN(object):
     def __init__(self, datagen=None,real_input_shape=None, n_classes=None, noise_shape=None, optimizer=None, save_synthetic=None):
@@ -71,52 +73,36 @@ class GTN(object):
         # (for the 'inner loop' from the GTN paper)
         # noise input
         noise_input = Input(
-            #shape=self.noise_shape,
-            batch_shape=(16,)+self.noise_shape,
+            shape=self.noise_shape,
             name='noise_input'
         )
         
         # (for 'outer loop' from the GTN paper)
         # real training data
         real_input = Input(
-            #shape=self.real_input_shape,
-            batch_shape=(16,)+self.real_input_shape,
+            shape=self.real_input_shape,
             name='real_input'
         )
         # generate takes noise as input
         teacher = self.get_generator(noise_input)
 
+        concat_layer = ConcatLayer([teacher, real_input])
+        gate_layer = Lambda(lambda x: x[:, :, :, 0:1], name="data_gate")(concat_layer)
+
         # learner gets input from synthetic data or real data
-        learner = self.get_learner(teacher, real_input)
+        learner = self.get_learner()
 
-        # concatenate layer in learner is concatenate [real, fake] axis =0
-        real_output = Lambda(lambda x: x[16:, :])(learner)
-        fake_output = Lambda(lambda x: x[:16, :])(learner)
-
+        x = learner(gate_layer)
         
         # learner should have a fake output so we can prevent fake data from updating weights
-        fake_output = Dense(self.n_classes, activation='sigmoid', name='fake_output')(fake_output)
-        real_output = Dense(self.n_classes, activation='sigmoid', name='real_output')(real_output)
+        output = Dense(self.n_classes, activation='sigmoid', name='output')(x)
 
         # model is compiled with two inputs and two outputs
         self.model = Model(
             inputs=[real_input, noise_input],
-            outputs=[real_output, fake_output, teacher]
+            outputs=[output, teacher]
         )
 
-        # TODO: make loss/weights a class variable?
-        self.model.compile(
-            optimizer=self.optimizer,
-            loss={
-                'real_output': 'categorical_crossentropy',
-                'fake_output': 'categorical_crossentropy'
-            },
-            loss_weights={
-                'real_output': 1.0,
-                'fake_output': 0.01  # fake output should have less impact on weight updates
-            },
-            metrics=['categorical_accuracy']
-        )
         return self.model
 
     def get_noise_array(self, batch_size):
@@ -133,40 +119,34 @@ class GTN(object):
     def train(self, inner_loops, outer_loops):
         model = self.get_model()
 
+        optimizer = SGD()
+        loss_func = CategoricalCrossentropy()
+        
+        # TODO: metrics
+
+        learner = self.get_learner()
+
+        epochs = 2
         for _ in range(outer_loops):
-            print("INNER LOOP TRAIN")
-            self.datagen.noise_only = True
-            for _ in range(inner_loops):
-                model.fit(
-                    self.datagen,
-                    epochs=2,
-                    verbose=0
-                )
-            
-            print("OUTER LOOP TRAIN")
-            # outerloop training
-            # generator weights should be updated from real-data loss
-            self.datagen.noise_only = False
-            model.fit(
-                self.datagen,
-                epochs=2,
-                verbose=1
-            )
-        
-        if self.synthetic_dir:
-            out = self.model.predict(self.datagen[0][0])
-            images = out[-1]
-            plt.figure(figsize=(10,10))
-            for i in range(images.shape[0]):
-                plt.subplot(4, 4, i+1)
-                image = images[i, :, :, :]
-                image = np.reshape(image, [28, 28])
-                plt.imshow(image, cmap='gray')
-                plt.axis('off')
-            plt.tight_layout()
-            plt.savefig(os.path.join(self.synthetic_dir, "t.png"))
-            plt.close('all')
-        
+            for __ in range(inner_loops):
+                for step, data in enumerate(self.datagen):
+                    if step == 2: break
+                    with GradientTape() as tape:
+                        x, y = data
+                        
+                        # logits is shape (2, batch_size, num_classes)
+                        # 2 is because of two inputs
+                        logits = model(x)
+                        loss_value = loss_func(y['output'], logits[0])
+                    
+                    
+                    gradients = tape.gradient(loss_value, learner.trainable_weights)
+                    optimizer.apply_gradients(zip(gradients, learner.trainable_weights))
+                    
+                    
+                    
+
+
 
 
     # TODO: support manually training

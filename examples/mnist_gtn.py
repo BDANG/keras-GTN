@@ -5,7 +5,8 @@ from tensorflow.keras.layers import Conv2D, Conv2DTranspose, UpSampling2D
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.layers import LeakyReLU, Dropout
 from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.layers import concatenate as ConcatLayer
+from tensorflow.keras.layers import Concatenate as ConcatLayer
+from tensorflow.keras.layers import Layer
 from tensorflow.keras.optimizers import Adadelta, Adam, RMSprop
 from tensorflow.keras.utils import Sequence
 from tensorflow.keras.utils import to_categorical
@@ -19,7 +20,7 @@ class MNISTDataGenerator(Sequence):
         self.batch_size = batch_size
         
         # include an additional dead-class for when blank real data is given to the model
-        self.n_classes = n_classes+1
+        self.n_classes = n_classes
         self.noise_shape = noise_shape
         self.shuffle = shuffle
         
@@ -52,26 +53,43 @@ class MNISTDataGenerator(Sequence):
                  {'real_output': real_output, 'fake_output': fake_output}
         """
         noise = np.random.normal(size=(self.batch_size, 100))
-        fake_output = np.random.randint(self.n_classes, size=self.batch_size)
-        fake_output = to_categorical(fake_output, num_classes=self.n_classes)
+
         
         if self.noise_only:
             # blank data
             real_data = np.zeros((self.batch_size,)+self.x_train.shape[1:])
             
-            # blank x data should map to y that is 'dead class'
-            # i.e. if self.n_classes=11, then the 'dead class' is 10
-            real_output = np.ones(self.batch_size)*(self.n_classes-1)
-            real_output = to_categorical(real_output, num_classes=self.n_classes)
+            output = np.random.randint(self.n_classes, size=self.batch_size)
+            output = to_categorical(output, num_classes=self.n_classes)            
         else:
             real_data = self.x_train[index:(index+self.batch_size), :, :]
-            real_output = self.y_train[index:(index+self.batch_size), :]
+            output = self.y_train[index:(index+self.batch_size), :]
         
-        return {'real_input': real_data.astype(np.float32), 'noise_input': noise}, {'real_output': real_output, 'fake_output': fake_output}
+        return {'real_input': real_data.astype(np.float32), 'noise_input': noise}, {'output': output}
     
     def on_epoch_end(self):
         pass
 
+
+class MNISTLearner(Layer):
+    def __init__(self):
+        super(MNISTLearner, self).__init__()
+
+        self.l1 = Conv2D(64, (3, 3), padding='same')
+        self.l2 = LeakyReLU()
+        self.l3 = MaxPooling2D(pool_size=(2,2))
+        self.l4 = Flatten()
+        self.l5 = Dense(128, activation='relu')
+        self.l6 = Dropout(0.2)
+        
+
+    def call(self, inputs):
+        x = self.l1(inputs)
+        x = self.l2(x)
+        x = self.l3(x)
+        x = self.l4(x)
+        x = self.l5(x)
+        return self.l6(x)
 
 class MNIST_GTN(GTN):
     def __init__(self, **kwargs):
@@ -113,48 +131,18 @@ class MNIST_GTN(GTN):
         self.generator = x
         return self.generator
 
-    def get_learner_old(self, real_input, teacher):
-        if self.learner is not None:
-            return self.learner
-
-        # learner has 2 possible inputs: real data and synthetic data (output of the generator)
-        # TODO: verify concatenate axis
-        x = ConcatLayer([real_input, teacher], axis=-1)
-        
-        # TODO: verify that this architecture is good for MNIST
-        x = Conv2D(64, (3, 3), padding='same')(x)
-        x = LeakyReLU()(x)
-        x = Dropout(0.2)(x)
-        
-        x = Conv2D(64, (3, 3), padding='same')(x)
-        x = LeakyReLU()(x)
-        x = Dropout(0.2)(x)
-
-        x = Conv2D(64, (3, 3), padding='same')(x)
-        x = LeakyReLU()(x)
-        x = Dropout(0.2)(x)
-        
-        x = Flatten()(x)
-
-        x = Dense(256, activation='relu')(x)
-        x = Dense(256, activation='relu')(x)
-        self.learner = x
-        return self.learner
-
-    def get_learner(self, real_input, teacher):
+    def get_learner(self):
         if self.learner is not None:
             return self.learner
         
-        # CONCATENATE IS ALWAYS REAL INPUT FIRST
-        x = ConcatLayer([real_input, teacher], axis=0)
-
-        x = Conv2D(64, (3, 3), padding='same')(x)
-        x = LeakyReLU()(x)
-        x = MaxPooling2D(pool_size=(2,2))(x)
-        x = Flatten()(x)
-        x = Dense(128, activation='relu')(x)
-        x = Dropout(0.2)(x)
-        self.learner = x
+        # x = Conv2D(64, (3, 3), padding='same')(layer)
+        # x = LeakyReLU()(x)
+        # x = MaxPooling2D(pool_size=(2,2))(x)
+        # x = Flatten()(x)
+        # x = Dense(128, activation='relu')(x)
+        # x = Dropout(0.2)(x)
+        # self.learner = x
+        self.learner = MNISTLearner()
         return self.learner
 
 
@@ -164,5 +152,5 @@ if __name__ == "__main__":
     gtn = MNIST_GTN(datagen=datagen, optimizer=optimizer, real_input_shape=(28, 28, 1), n_classes=10, save_synthetic="synthetic")
     model = gtn.get_model()
     model.summary()
-    gtn.train(inner_loops=2, outer_loops=2)
+    gtn.train(inner_loops=1, outer_loops=1)
     
